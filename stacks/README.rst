@@ -29,6 +29,7 @@ Step 1 (optional): Activate ScienceCloud API authentication
 
 Step 2: Execute gstacks in `screen` mode
     usage: gstacks [OPTIONS] input_folder
+    
     positional arguments:
         input_folder    Path to input folder containing valid input .fastq.gz
                         files.
