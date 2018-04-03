@@ -160,7 +160,7 @@ newly-created jobs so that this limit is never exceeded.
 
     def setup_args(self):
 
-        self.add_param('input_container', type=str,
+        self.add_param('input_folder', type=str,
                        help="Path to local folder containing fastq files.")
 
     def new_tasks(self, extra):
@@ -178,7 +178,6 @@ newly-created jobs so that this limit is never exceeded.
             extra_args = extra.copy()
             extra_args['jobname'] = job_name
 
-            # FIXME: ignore SessionBasedScript feature of customizing
             # output folder
             extra_args['output_dir'] = self.params.output
             extra_args['output_dir'] = extra_args['output_dir'].replace('NAME', job_name)
