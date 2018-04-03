@@ -4,7 +4,6 @@ echo "[`date`: Start]"
 
 cores=$( grep -c ^processor /proc/cpuinfo )
 
-pairs=$( ls /input/*.fastq.gz )
 echo "Step 1: process_radtags"
 time process_radtags  $( echo $( ls /input/*.fastq.gz ) | awk '{print "-1 "$1 " -2 "$2}' ) -o /output -e apeKI -r -c -q
 RET=$?
