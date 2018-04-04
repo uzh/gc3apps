@@ -62,19 +62,16 @@ def get_valid_input_pair(input_folder):
     search for a pair of type [R1,R2].
     Search is done at filename level.
     """
-    r1list = [infile.split('R1')[0] for infile in os.listdir(input_folder)
-              if infile.endswith('R1.fastq.gz')]
 
-    input_list = [(os.path.join(input_folder,
-                                "{0}R1.fastq.gz".format(infile.split('R2')[0])),
-                   os.path.join(input_folder,
-                                "{0}R2.fastq.gz".format(infile.split('R2')[0]))) for infile in os.listdir(input_folder)
-                  if infile.endswith('R2.fastq.gz') and infile.split('R2')[0] in r1list]
-
-    return input_list
-
+    return [(os.path.join(input_folder, filename),
+            os.path.join(input_folder, "{0}R2.fastq.gz".format(filename.split('R1')[0])))
+            for filename in os.listdir(input_folder)
+            if filename.endswith("R1.fastq.gz")
+            and os.path.isfile(os.path.join(input_folder,
+                                            "{0}R2.fastq.gz".format(filename.split('R1')[0])))]
 
 # custom application class
+
 
 class GstacksApplication(Application):
     """
@@ -91,9 +88,9 @@ class GstacksApplication(Application):
         The wrapper script is being used for start the simulation.
         """
 
-        inputs = []
+        inputs = dict()
 
-        inputs[extra_args['stack_exec']] = DEFAULT_STACKS_RUN_SCRIPT
+        inputs[extra_args['stacks_exec']] = DEFAULT_STACKS_RUN_SCRIPT
         for f in input_files:
             inputs[f] = "./input/{0}".format(os.path.basename(f))
 
@@ -187,15 +184,16 @@ newly-created jobs so that this limit is never exceeded.
 
             extra_args["docker"] = self.params.docker
             extra_args["decoy_output_folder"] = os.path.join(self.session.name, "output")
+            extra_args['stacks_exec'] = self.params.stacks_exec
 
-            self.log.info("Creating Task for input file: %s" % input_files)
+            self.log.info("Creating Task for input file: {0}".format(job_name))
 
             tasks.append(GstacksApplication(
                 input_files,
                 **extra_args
             ))
 
-            return tasks
+        return tasks
 
 
 # run script, but allow GC3Pie persistence module to access classes defined here;
