@@ -99,7 +99,7 @@ class GbidsApplication(Application):
     """
     application_name = 'gbids'
 
-    def __init__(self, subject, subject_name, control_files, repeat_index, docker_run, freesurfer_license,
+    def __init__(self, subject, subject_name, control_files, docker_run, freesurfer_license,
                  **extra_args):
 
         executables = []
@@ -145,18 +145,6 @@ class GbidsApplication(Application):
             join=True,
             executables=executables,
             **extra_args)
-
-    def terminated(self):
-        """
-        Move output file in 'result_dir'
-        """
-        gc3libs.log.info("Moving results from {0} to {1}".format(self.output_dir,
-                                                                 self.subject_dir))
-
-        for elem in os.listdir(self.output_dir):
-            shutil.move(os.path.join(self.output_dir, elem),
-                        os.path.join(self.subject_dir, elem))
-
 
 class GbidsScript(SessionBasedScript):
     """
@@ -231,7 +219,14 @@ class GbidsScript(SessionBasedScript):
         control_files, subjects_list = _get_subjects(self.params.input_folder)
         for subject in subjects_list:
             for repeat in range(0, self.params.repeat):
+
+                # BIDS app specification requires a subject name without the 'sub-' prefix
+                # check input folder basename and stripe 'sub-' out in case.
                 subject_name = os.path.basename(subject)
+
+                if subject_name.startswith("sub-") or subject_name.startswith("sub_"):
+                    subject_name = subject_name[4:]
+
                 job_name = "{subject}-{rep}".format(subject=subject_name,
                                                     rep=repeat)
 
@@ -251,7 +246,6 @@ class GbidsScript(SessionBasedScript):
                     subject,
                     subject_name,
                     control_files,
-                    repeat,
                     self.params.docker,
                     self.params.freesurfer_license,
                     **extra_args))
@@ -267,10 +261,12 @@ class GbidsScript(SessionBasedScript):
             if isinstance(task, GbidsApplication) and task.execution.returncode == 0:
                 subject_name = task.subject_name
 
-                for bid_app in os.listdir(task.output_dir):
-                    for element in os.listdir(os.path.join(task.output_dir, bid_app)):
-                        shutil.move(os.path.join(task.output_dir, bid_app, element),
-                                    os.path.join(task.results_dir, bid_app, subject_name))
+                bid_app = [app for app in os.listdir(task.output_dir)
+                            if os.path.isdir(os.path.join(task.output_dir, app))]
+                for app in bid_app:
+                    for element in os.listdir(os.path.join(task.output_dir, app)):
+                        shutil.move(os.path.join(task.output_dir, app, element),
+                                    os.path.join(task.results_dir, app, subject_name))
 
         return
 
