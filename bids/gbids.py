@@ -154,7 +154,7 @@ class GbidsApplication(Application):
                 inputs[freesurfer_license] = os.path.basename(freesurfer_license)
                 docker_mount += " -v {0}:/opt/freesurfer/license.txt ".format(inputs[freesurfer_license])
 
-            analysis = "{0} --participant-label {1}".format(analysis_level,
+            analysis = "{0} --participant_label {1}".format(analysis_level,
                                                             subject_name)
 
         arguments = DOCKER_RUN_COMMAND.format(DOCKER_MOUNT=docker_mount,
