@@ -142,6 +142,7 @@ class GbidsApplication(Application):
             if freesurfer_license:
                 inputs[freesurfer_license] = os.path.basename(freesurfer_license)
                 docker_mount += " -v $PWD/{0}:/opt/freesurfer/license.txt ".format(inputs[freesurfer_license])
+            analysis = analysis_level
         else:
             # Use local filesystem as reference
             # Define mount points
@@ -153,9 +154,11 @@ class GbidsApplication(Application):
                 inputs[freesurfer_license] = os.path.basename(freesurfer_license)
                 docker_mount += " -v {0}:/opt/freesurfer/license.txt ".format(inputs[freesurfer_license])
 
+            analysis = "{0} --participant-label {1}".format(analysis_level,
+                                                            subject_name)
+
         arguments = DOCKER_RUN_COMMAND.format(DOCKER_MOUNT=docker_mount,
                                               DOCKER_TO_RUN=docker_run,
-                                              SUBJECT_NAME=subject_name,
                                               ANALYSIS=analysis_level)
 
         gc3libs.log.debug("Creating application for executing: %s", arguments)
