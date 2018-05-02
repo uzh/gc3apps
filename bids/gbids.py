@@ -281,6 +281,11 @@ class GbidsScript(SessionBasedScript):
                 subject_name = os.path.basename(subject)
                 job_name = "sub-{0}".format(subject_name)
 
+                if self.params.transfer_data:
+                    subject_dir = subject
+                else:
+                    subject_dir = self.params.bids_input_folder
+
                 extra_args = extra.copy()
                 extra_args['transfer_data'] = self.params.transfer_data
                 extra_args['default_output'] = os.path.join(self.session.path,
@@ -293,7 +298,7 @@ class GbidsScript(SessionBasedScript):
 
                 self.log.debug("Creating Application for subject {0}".format(subject_name))
                 tasks.append(GbidsApplication(
-                    subject,
+                    subject_dir,
                     subject_name,
                     control_files,
                     self.bids_app_execution,
