@@ -159,7 +159,7 @@ class GbidsApplication(Application):
 
         arguments = DOCKER_RUN_COMMAND.format(DOCKER_MOUNT=docker_mount,
                                               DOCKER_TO_RUN=docker_run,
-                                              ANALYSIS=analysis_level)
+                                              ANALYSIS=analysis)
 
         gc3libs.log.debug("Creating application for executing: %s", arguments)
 
