@@ -78,7 +78,7 @@ def _get_subjects(root_input_folder):
     then remove subjects form list according to participant_exclusion_file (if any)
     """
     layout = BIDSLayout(root_input_folder)
-    return [os.path.abspath(os.path.join(root_input_folder, "sub-{}".format(subject))) for subject in layout.get_subjects()]
+    return [(os.path.abspath(os.path.join(root_input_folder, "sub-{}".format(subject))),subject) for subject in layout.get_subjects()]
 
 
 def _get_control_files(input_folder):
@@ -277,13 +277,11 @@ class GbidsScript(SessionBasedScript):
 
         if _is_participant_analysis(self.params.analysis_level):
             # participant level analysis
-            for subject in _get_subjects(self.params.bids_input_folder):
-                subject_name = os.path.basename(subject)
-                job_name = "sub-{0}".format(subject_name)
+            for (subject_dir,subject_name) in _get_subjects(self.params.bids_input_folder):
+                job_name = subject_name
 
-                if self.params.transfer_data:
-                    subject_dir = subject
-                else:
+                if self.params.transfer_data == False:
+                    # Use root BIDS folder
                     subject_dir = self.params.bids_input_folder
 
                 extra_args = extra.copy()
