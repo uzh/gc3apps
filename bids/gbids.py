@@ -56,11 +56,13 @@ from gc3libs import Application
 from gc3libs.workflow import RetryableTask
 from gc3libs.cmdline import SessionBasedScript, existing_file, existing_directory
 import gc3libs.utils
+from gc3libs.quantity import GB
 
 # 3rd-party dependencies
 from bids.grabbids import BIDSLayout
 
 # Defaults
+MAX_MEMORY = 32*GB
 DEFAULT_BIDS_FOLDER = "data/"
 DEFAULT_RESULT_FOLDER = "output/"
 DEFAULT_DOCKER_BIDS_ARGS = "--no-submm-recon"
@@ -107,15 +109,15 @@ class GbidsApplication(Application):
     """
     application_name = 'gbids'
 
-    def __init__(self, subject, subject_name, control_files, docker_run,
-                 freesurfer_license, analysis_level, **extra_args):
+    def __init__(self, docker_run, subject, subject_name, control_files,
+                 analysis_level, **extra_args):
 
         executables = []
         inputs = dict()
+        outputs = []
 
         self.subject_dir = subject
         self.subject_name = subject_name
-        self.results_dir = extra_args['results_dir']
 
         if extra_args['transfer_data']:
             # Input data need to be transferred to compute node
@@ -140,10 +142,6 @@ class GbidsApplication(Application):
                 SUBJECT_DIR=DEFAULT_BIDS_FOLDER,
                 OUTPUT_DIR=DEFAULT_RESULT_FOLDER)
 
-            if freesurfer_license:
-                inputs[freesurfer_license] = os.path.basename(freesurfer_license)
-                docker_mount += " -v $PWD/{0}:/opt/freesurfer/license.txt ".format(inputs[freesurfer_license])
-
             analysis = analysis_level
             outputs = [DEFAULT_RESULT_FOLDER]
         else:
@@ -153,13 +151,16 @@ class GbidsApplication(Application):
                 SUBJECT_DIR=subject,
                 OUTPUT_DIR=extra_args['output_dir'])
 
-            if freesurfer_license:
-                inputs[freesurfer_license] = os.path.basename(freesurfer_license)
-                docker_mount += " -v {0}:/opt/freesurfer/license.txt ".format(inputs[freesurfer_license])
-
             analysis = "{0} --participant_label {1}".format(analysis_level,
                                                             subject_name)
-            outputs = []
+
+        if extra_args['freesurfer_license']:
+            if extra_args['transfer_data']:
+                inputs[freesurfer_license] = os.path.basename(extra_args['freesurfer_license'])
+                freesurfer_path = "$PWD/{0}".format(inputs[freesurfer_license])
+            else:
+                freesurfer_path = extra_args['freesurfer_license']
+            docker_mount += " -v {0}:/opt/freesurfer/license.txt ".format(freesurfer_path)
 
         arguments = DOCKER_RUN_COMMAND.format(DOCKER_MOUNT=docker_mount,
                                               DOCKER_TO_RUN=docker_run,
@@ -184,9 +185,9 @@ class GbidsApplication(Application):
         :return: None
         """
         if self.execution.returncode == 137:
-            if self.requested_memory:
-                self.requested_memory *= 4
-
+            if self.requested_memory and self.requested_memory < MAX_MEMORY:
+                self.requested_memory *= 4*GB
+                self.execution.returncode = (0,99)
 
 class GbidsRetriableTask(RetryableTask):
     def __init__(self, subject, subject_name, control_files, docker_run,
@@ -262,7 +263,7 @@ class GbidsScript(SessionBasedScript):
                                                                                               ANALYSIS_LEVELS)
 
         self.bids_app_execution = self.params.bids_app
-        gc3libs.log.info("BIDS app execution: '{0}'".format(self.bids_app_execution))
+        self.params.bids_output_folder = os.path.abspath(self.params.bids_output_folder)
 
     def new_tasks(self, extra):
         """
@@ -295,7 +296,7 @@ class GbidsScript(SessionBasedScript):
                 extra_args['jobname'] = job_name
                 extra_args['output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
                                                         '.compute')
-                extra_args['results_dir'] = os.path.abspath(self.params.bids_output_folder)
+                # extra_args['results_dir'] = os.path.abspath(self.params.bids_output_folder)
 
                 self.log.debug("Creating Application for subject {0}".format(subject_name))
                 tasks.append(GbidsApplication(
@@ -312,11 +313,8 @@ class GbidsScript(SessionBasedScript):
             extra_args = extra.copy()
             extra_args['jobname'] = self.params.analysis_level
             extra_args['data-transfer'] = self.params.transfer_data
-            extra_args['output_dir'] = self.params.output
-            extra_args['output_dir'] = self.params.output.replace('NAME',
-                                                                  os.path.join('.compute',
-                                                                               extra_args['jobname']))
-            extra_args['results'] = os.path.abspath(self.params.output.replace('NAME', ''))
+            extra_args['output_dir'] = os.path.join(self.params.bids_output_folder,
+                                                    '.compute')
 
             self.log.debug("Creating Application for analysis {0}".format(self.params.analysis_level))
             tasks.append(GbidsApplication(
@@ -334,44 +332,35 @@ class GbidsScript(SessionBasedScript):
         """
         Merge all results from all subjects into `results` folder
         """
+
         for task in self.session:
             if isinstance(task, GbidsApplication) and task.execution.returncode == 0:
-                # subject_name = task.subject_name
-
-                try:
-                    # cp sub-sub-02/* /tmp/data/ -Rf
-                    process = subprocess.Popen(COPY_COMMAND.format(task.output_dir,
-                                                                   task.results_dir),
-                                               stderr=subprocess.PIPE,
-                                               shell=True)
-                    process.wait()
-                    if process.returncode != 0:
-                        gc3libs.log.warning("Failed transferring data from {0} to {1}".format(task.output_dir,
-                                                                                              task.results_dir))
-                    else:
-                        # all good, cleanup source folder
-                        shutil.rmtree(task.output_dir)
-                except Exception as ex:
-                    gc3libs.log.error("Exception while transferring results from {0} to {1}. "
-                                      "Error class {2} - message {3}".format(task.output_dir,
-                                                                             task.results_dir,
-                                                                             ex.__class__,
-                                                                             ex.message))
+                gc3libs.log.debug("Moving tasks {0} results from {1} to {2}".format(task.subject_name,
+                                                                                    task.output_dir,
+                                                                                    self.params.bids_output_folder))
+                gc3libs.utils.movetree(task.output_dir, self.params.bids_output_folder)
 
 
-                # bid_app = [app for app in os.listdir(task.output_dir)
-                #            if os.path.isdir(os.path.join(task.output_dir, app))]
-                # for app in bid_app:
-                #     dest = os.path.join(task.results_dir, app)
-                #     if not os.path.isdir(dest):
-                #         os.makedirs(dest)
-                #
-                #     for element in os.listdir(os.path.join(task.output_dir, app)):
-                #         if os.path.isfile(element):
-                #             shutil.move(os.path.join(task.output_dir, app, element),
-                #                         os.path.join(dest,element))
-                #         else:
-                #             shutil.move(os.path.join(task.output_dir, app, element), dest)
+
+                # try:
+                #     # cp sub-sub-02/* /tmp/data/ -Rf
+                #     process = subprocess.Popen(COPY_COMMAND.format(task.output_dir,
+                #                                                    task.results_dir),
+                #                                stderr=subprocess.PIPE,
+                #                                shell=True)
+                #     process.wait()
+                #     if process.returncode != 0:
+                #         gc3libs.log.warning("Failed transferring data from {0} to {1}".format(task.output_dir,
+                #                                                                               task.results_dir))
+                #     else:
+                #         # all good, cleanup source folder
+                #         shutil.rmtree(task.output_dir)
+                # except Exception as ex:
+                #     gc3libs.log.error("Exception while transferring results from {0} to {1}. "
+                #                       "Error class {2} - message {3}".format(task.output_dir,
+                #                                                              task.results_dir,
+                #                                                              ex.__class__,
+                #                                                              ex.message))
         return
 
 
