@@ -151,7 +151,7 @@ class GbidsApplication(Application):
             # Define mount points
             docker_mount = " -v {SUBJECT_DIR}:/bids:ro -v {OUTPUT_DIR}:/output ".format(
                 SUBJECT_DIR=subject,
-                OUTPUT_DIR=extra_args['results_dir'])
+                OUTPUT_DIR=extra_args['output_dir'])
 
             if freesurfer_license:
                 inputs[freesurfer_license] = os.path.basename(freesurfer_license)
@@ -293,9 +293,8 @@ class GbidsScript(SessionBasedScript):
                 extra_args['default_output'] = os.path.join(self.session.path,
                                                             DEFAULT_RESULT_FOLDER)
                 extra_args['jobname'] = job_name
-                extra_args['output_dir'] = self.params.output.replace('NAME',
-                                                                      os.path.join('.compute',
-                                                                                   job_name))
+                extra_args['output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
+                                                        '.compute')
                 extra_args['results_dir'] = os.path.abspath(self.params.bids_output_folder)
 
                 self.log.debug("Creating Application for subject {0}".format(subject_name))
