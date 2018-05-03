@@ -47,6 +47,7 @@ __version__ = '1.0'
 
 import os
 import shutil
+import subprocess
 
 # GC3Pie specific libraries
 import gc3libs
@@ -67,7 +68,7 @@ DEFAULT_FREESURFER_LICENSE_FILE = "license.txt"
 DEFAULT_DOCKER_BIDS_APP = "poldracklab/fmriprep " + DEFAULT_DOCKER_BIDS_ARGS
 ANALYSIS_LEVELS = ["participant", "group1", "group2", "group"]
 DOCKER_RUN_COMMAND = "sudo docker run -i --rm {DOCKER_MOUNT} {DOCKER_TO_RUN} /bids /output {ANALYSIS} "
-
+COPY_COMMAND = "cp {0}/* {1} -Rf"
 
 # Utility methods
 
@@ -142,7 +143,9 @@ class GbidsApplication(Application):
             if freesurfer_license:
                 inputs[freesurfer_license] = os.path.basename(freesurfer_license)
                 docker_mount += " -v $PWD/{0}:/opt/freesurfer/license.txt ".format(inputs[freesurfer_license])
+
             analysis = analysis_level
+            outputs = [DEFAULT_RESULT_FOLDER]
         else:
             # Use local filesystem as reference
             # Define mount points
@@ -156,6 +159,7 @@ class GbidsApplication(Application):
 
             analysis = "{0} --participant_label {1}".format(analysis_level,
                                                             subject_name)
+            outputs = []
 
         arguments = DOCKER_RUN_COMMAND.format(DOCKER_MOUNT=docker_mount,
                                               DOCKER_TO_RUN=docker_run,
@@ -167,8 +171,8 @@ class GbidsApplication(Application):
             self,
             arguments=arguments,
             inputs=inputs,
-            outputs=[DEFAULT_RESULT_FOLDER],
-            stdout='gbids.log',
+            outputs=outputs,
+            stdout='{0}.log'.format(subject_name),
             join=True,
             executables=executables,
             **extra_args)
@@ -335,19 +339,40 @@ class GbidsScript(SessionBasedScript):
             if isinstance(task, GbidsApplication) and task.execution.returncode == 0:
                 # subject_name = task.subject_name
 
-                bid_app = [app for app in os.listdir(task.output_dir)
-                           if os.path.isdir(os.path.join(task.output_dir, app))]
-                for app in bid_app:
-                    dest = os.path.join(task.results_dir, app)
-                    if not os.path.isdir(dest):
-                        os.makedirs(dest)
+                try:
+                    # cp sub-sub-02/* /tmp/data/ -Rf
+                    process = subprocess.Popen(COPY_COMMAND.format(task.output_dir,
+                                                                   task.results_dir),
+                                               stderr=subprocess.PIPE,
+                                               shell=True)
+                    process.wait()
+                    if process.returncode != 0:
+                        gc3libs.log.warning("Failed transferring data from {0} to {1}".format(task.output_dir,
+                                                                                              task.results_dir))
+                    else:
+                        # all good, cleanup source folder
+                        shutil.rmtree(task.output_dir)
+                except Exception as ex:
+                    gc3libs.log.error("Exception while transferring results from {0} to {1}. "
+                                      "Error class {2} - message {3}".format(task.output_dir,
+                                                                             task.results_dir,
+                                                                             ex.__class__,
+                                                                             ex.message))
 
-                    for element in os.listdir(os.path.join(task.output_dir, app)):
-                        if os.path.isfile(element):
-                            shutil.move(os.path.join(task.output_dir, app, element),
-                                        os.path.join(dest,element))
-                        else:
-                            shutil.move(os.path.join(task.output_dir, app, element), dest)
+
+                # bid_app = [app for app in os.listdir(task.output_dir)
+                #            if os.path.isdir(os.path.join(task.output_dir, app))]
+                # for app in bid_app:
+                #     dest = os.path.join(task.results_dir, app)
+                #     if not os.path.isdir(dest):
+                #         os.makedirs(dest)
+                #
+                #     for element in os.listdir(os.path.join(task.output_dir, app)):
+                #         if os.path.isfile(element):
+                #             shutil.move(os.path.join(task.output_dir, app, element),
+                #                         os.path.join(dest,element))
+                #         else:
+                #             shutil.move(os.path.join(task.output_dir, app, element), dest)
         return
 
 
