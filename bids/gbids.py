@@ -295,7 +295,8 @@ class GbidsScript(SessionBasedScript):
                                                             DEFAULT_RESULT_FOLDER)
                 extra_args['jobname'] = job_name
                 extra_args['output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
-                                                        '.compute')
+                                                        '.compute',
+                                                        subject_name)
                 extra_args['freesurfer_license'] = self.params.freesurfer_license
 
                 self.log.debug("Creating Application for subject {0}".format(subject_name))
