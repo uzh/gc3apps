@@ -118,6 +118,7 @@ class GbidsApplication(Application):
 
         self.subject_dir = subject
         self.subject_name = subject_name
+        self.data_output_dir = extra_args['data_output_dir']
 
         if extra_args['transfer_data']:
             # Input data need to be transferred to compute node
@@ -149,7 +150,7 @@ class GbidsApplication(Application):
             # Define mount points
             docker_mount = " -v {SUBJECT_DIR}:/bids:ro -v {OUTPUT_DIR}:/output ".format(
                 SUBJECT_DIR=subject,
-                OUTPUT_DIR=extra_args['output_dir'])
+                OUTPUT_DIR=extra_args['data_output_dir'])
 
             analysis = "{0} --participant_label {1}".format(analysis_level,
                                                             subject_name)
@@ -297,6 +298,9 @@ class GbidsScript(SessionBasedScript):
                 extra_args['output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
                                                         '.compute',
                                                         subject_name)
+                extra_args['data_output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
+                                                             subject_name)
+
                 extra_args['freesurfer_license'] = self.params.freesurfer_license
 
                 self.log.debug("Creating Application for subject {0}".format(subject_name))
@@ -316,6 +320,8 @@ class GbidsScript(SessionBasedScript):
             extra_args['data-transfer'] = self.params.transfer_data
             extra_args['output_dir'] = os.path.join(self.params.bids_output_folder,
                                                     '.compute')
+            extra_args['data_output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
+                                                         subject_name)
             extra_args['freesurfer_license'] = self.params.freesurfer_license
 
             self.log.debug("Creating Application for analysis {0}".format(self.params.analysis_level))
@@ -337,33 +343,9 @@ class GbidsScript(SessionBasedScript):
         for task in self.session:
             if isinstance(task, GbidsApplication) and task.execution.returncode == 0:
                 gc3libs.log.debug("Moving tasks {0} results from {1} to {2}".format(task.subject_name,
-                                                                                    task.output_dir,
+                                                                                    task.data_output_dir,
                                                                                     self.params.bids_output_folder))
-                gc3libs.utils.movetree(task.output_dir, self.params.bids_output_folder)
-
-
-
-                # try:
-                #     # cp sub-sub-02/* /tmp/data/ -Rf
-                #     process = subprocess.Popen(COPY_COMMAND.format(task.output_dir,
-                #                                                    task.results_dir),
-                #                                stderr=subprocess.PIPE,
-                #                                shell=True)
-                #     process.wait()
-                #     if process.returncode != 0:
-                #         gc3libs.log.warning("Failed transferring data from {0} to {1}".format(task.output_dir,
-                #                                                                               task.results_dir))
-                #     else:
-                #         # all good, cleanup source folder
-                #         shutil.rmtree(task.output_dir)
-                # except Exception as ex:
-                #     gc3libs.log.error("Exception while transferring results from {0} to {1}. "
-                #                       "Error class {2} - message {3}".format(task.output_dir,
-                #                                                              task.results_dir,
-                #                                                              ex.__class__,
-                #                                                              ex.message))
-        return
-
+                gc3libs.utils.movetree(task.data_output_dir, self.params.bids_output_folder)
 
 # run script, but allow GC3Pie persistence module to access classes defined here;
 # for details, see: http://code.google.com/p/gc3pie/issues/detail?id=95
