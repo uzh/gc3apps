@@ -296,15 +296,15 @@ class GbidsScript(SessionBasedScript):
                 extra_args['jobname'] = job_name
                 extra_args['output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
                                                         '.compute')
-                # extra_args['results_dir'] = os.path.abspath(self.params.bids_output_folder)
+                extra_args['freesurfer_license'] = self.params.freesurfer_license
 
                 self.log.debug("Creating Application for subject {0}".format(subject_name))
+
                 tasks.append(GbidsApplication(
+                    self.bids_app_execution,
                     subject_dir,
                     subject_name,
                     control_files,
-                    self.bids_app_execution,
-                    self.params.freesurfer_license,
                     self.params.analysis_level,
                     **extra_args))
 
@@ -315,14 +315,14 @@ class GbidsScript(SessionBasedScript):
             extra_args['data-transfer'] = self.params.transfer_data
             extra_args['output_dir'] = os.path.join(self.params.bids_output_folder,
                                                     '.compute')
+            extra_args['freesurfer_license'] = self.params.freesurfer_license
 
             self.log.debug("Creating Application for analysis {0}".format(self.params.analysis_level))
             tasks.append(GbidsApplication(
+                self.bids_app_execution,
                 self.params.bids_input_folder,
                 None,
                 control_files,
-                self.bids_app_execution,
-                self.params.freesurfer_license,
                 self.params.analysis_level,
                 **extra_args))
 
