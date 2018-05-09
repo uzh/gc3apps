@@ -175,7 +175,7 @@ class GeagerScript(SessionBasedScript):
             self.log.debug("Creating Application for subject {0}".format(subject_name))
 
             tasks.append(GeagerApplication(
-                self.params.input_folder,
+                subject,
                 subject_name,
                 subject_config_file,
                 **extra_args))
