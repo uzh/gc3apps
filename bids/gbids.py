@@ -29,7 +29,7 @@ See the output of ``gbids.py --help`` for program usage
 instructions.
 
 Example of docker execution:
-docker run -i --rm -v /mnt/filo/data/ds005:/bids_dataset:ro -v /mnt/filo/outputs:/outputs bids/fmriprep /bids_dataset /outputs participant --participant_label 01
+docker run -i --rm -v /mnt/filo/data/ds005:/bids_dataset:ro bids/fmriprep /bids_dataset /outputs participant --participant_label 01
 
 gbids takes BIDS files as input.
 """
@@ -74,6 +74,7 @@ COPY_COMMAND = "cp {0}/* {1} -Rf"
 
 # Utility methods
 
+
 def _get_subjects(root_input_folder):
     """
     build subject list form either input arguments (participant_label, participant_file) or
@@ -81,7 +82,8 @@ def _get_subjects(root_input_folder):
     then remove subjects form list according to participant_exclusion_file (if any)
     """
     layout = BIDSLayout(root_input_folder)
-    return [(os.path.abspath(os.path.join(root_input_folder, "sub-{}".format(subject))),subject) for subject in layout.get_subjects()]
+    return [(os.path.abspath(os.path.join(root_input_folder, "sub-{}".format(subject))),
+             subject) for subject in layout.get_subjects()]
 
 
 def _get_control_files(input_folder):
@@ -188,7 +190,8 @@ class GbidsApplication(Application):
         if self.execution.returncode == 137:
             if self.requested_memory and self.requested_memory < MAX_MEMORY:
                 self.requested_memory *= 4*GB
-                self.execution.returncode = (0,99)
+                self.execution.returncode = (0, 99)
+
 
 class GbidsRetriableTask(RetryableTask):
     def __init__(self, subject, subject_name, control_files, docker_run,
@@ -283,10 +286,10 @@ class GbidsScript(SessionBasedScript):
 
         if _is_participant_analysis(self.params.analysis_level):
             # participant level analysis
-            for (subject_dir,subject_name) in _get_subjects(self.params.bids_input_folder):
+            for (subject_dir, subject_name) in _get_subjects(self.params.bids_input_folder):
                 job_name = subject_name
 
-                if self.params.transfer_data == False:
+                if not self.params.transfer_data:
                     # Use root BIDS folder
                     subject_dir = self.params.bids_input_folder
 
@@ -315,6 +318,7 @@ class GbidsScript(SessionBasedScript):
 
         else:
             # Group level analysis
+            subject_name = self.params.analysis_level
             extra_args = extra.copy()
             extra_args['jobname'] = self.params.analysis_level
             extra_args['data-transfer'] = self.params.transfer_data
@@ -346,6 +350,7 @@ class GbidsScript(SessionBasedScript):
                                                                                     task.data_output_dir,
                                                                                     self.params.bids_output_folder))
                 gc3libs.utils.movetree(task.data_output_dir, self.params.bids_output_folder)
+
 
 # run script, but allow GC3Pie persistence module to access classes defined here;
 # for details, see: http://code.google.com/p/gc3pie/issues/detail?id=95
