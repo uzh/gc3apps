@@ -43,13 +43,13 @@ import os
 import gc3libs
 import gc3libs.exceptions
 from gc3libs import Application
-from gc3libs.cmdline import SessionBasedScript, existing_directory
+from gc3libs.cmdline import SessionBasedScript, existing_directory, existing_file
 import gc3libs.utils
 
 DEFAULT_DATA_FOLDER = "$PWD/data"
 DEFAULT_CONTAINER_APP = "shub://apeltzer/EAGER-GUI"
 RUN_EAGER = "singularity exec -B {data_folder}:{data_folder} {container} eagercli {subject_config}"
-# singularity exec -B /data/:/data/  ~/apeltzer-EAGER-GUI-master-latest.simg eagercli /data/eagertest_for_sergio/eager_output/ARLP_62/2018-04-30-07-19-EAGER_s3it.xml
+# singularity exec -B /data:/data apeltzer-EAGER-GUI-master-latest.simg eagercli /data/data_in/US57/2018-04-30-07-19-EAGER.xml
 
 
 # Utility methods
@@ -66,9 +66,9 @@ def _get_subjects_config(input_folder):
     for sbj in os.listdir(input_folder):
         for f in os.listdir(os.path.join(input_folder, sbj)):
             if f.endswith(".xml"):
-                subjects.append((os.path.abspath(os.path.join(input_folder,
-                                                              sbj)),
-                                 f))
+                subjects.append((sbj,
+                                 os.path.abspath(os.path.join(input_folder,sbj,
+                                                             f))))
                 continue
     return subjects
 
@@ -83,32 +83,23 @@ class GeagerApplication(Application):
 
     application_name = 'geager'
 
-    def __init__(self, data_folder, subject_name, subject_config, **extra_args):
+    def __init__(self, subject_name, subject_config, data_folder, container=DEFAULT_CONTAINER_APP, **extra_args):
         """
         Input and Output should be available through  a locally mounted
         shared filesystem
         e.g. /data
         """
 
-        inputs = {}
-
-        if extra_args['transfer_data'] == True:
-            # All input data need to be transferred
-            inputs[data_folder] = DEFAULT_DATA_FOLDER
-            data_folder = DEFAULT_DATA_FOLDER
-
-            inputs[subject_config] = ""
-
         arguments = RUN_EAGER.format(data_folder=data_folder,
-                                     container=DEFAULT_CONTAINER_APP,
+                                     container=container,
                                      subject_config=subject_config)
         gc3libs.log.debug("Creating application for executing: %s", arguments)
 
         Application.__init__(
             self,
             arguments=arguments,
-            inputs=inputs,
-            outputs=gc3libs.ANY_OUTPUT,
+            inputs=[],
+            outputs=[],
             stdout='{0}.log'.format(subject_name),
             join=True,
             **extra_args)
@@ -142,18 +133,26 @@ class GeagerScript(SessionBasedScript):
     def setup_args(self):
         self.add_param('input_folder',
                        type=existing_directory,
-                       help="Path to input folder containing valid input .bids files.")
+                       help="Path to input subjects folder.")
 
     def setup_options(self):
-        self.add_param("-F", "--datatransfer", dest="transfer_data",
-                       action="store_true", default=False,
-                       help="Transfer input data to compute nodes. "
-                            "If False, data will be assumed be already visible on "
-                            "compute nodes - e.g. shared filesystem. "
+        self.add_param("-B", "--data_folder", dest="data",
+                       default=None,
+                       type=existing_directory,
+                       help="Location of data folder. "
                             "Default: %(default)s.")
+
+        self.add_param("-X", "--container", dest="conteiner_to_run",
+                       default=DEFAULT_CONTAINER_APP,
+                       help="Location of the singularity container to run. "
+                            "Default: %(default)s.".format(DEFAULT_CONTAINER_APP))
 
     def parse_args(self):
         self.params.input_folder = os.path.abspath(self.params.input_folder)
+        if not self.params.data:
+            self.params.data = self.params.input_folder
+        else:
+            self.params.data = os.path.abspath(self.params.data)
 
     def new_tasks(self, extra):
         """
@@ -161,13 +160,10 @@ class GeagerScript(SessionBasedScript):
         """
         tasks = []
 
-        for (subject, subject_config_file) in _get_subjects_config(self.params.input_folder):
-            subject_name = os.path.basename(subject)
-
+        for (subject_name, subject_config_file) in _get_subjects_config(self.params.input_folder):
             job_name = "{0}".format(subject_name)
             extra_args = extra.copy()
             extra_args['jobname'] = job_name
-            extra_args['transfer_data'] = self.params.transfer_data
             extra_args['output_dir'] = self.params.output.replace('NAME',
                                                                   os.path.join('.compute',
                                                                                job_name))
@@ -175,9 +171,10 @@ class GeagerScript(SessionBasedScript):
             self.log.debug("Creating Application for subject {0}".format(subject_name))
 
             tasks.append(GeagerApplication(
-                subject,
                 subject_name,
                 subject_config_file,
+                self.params.data,
+                self.params.conteiner_to_run,
                 **extra_args))
 
         return tasks
