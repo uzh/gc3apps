@@ -62,6 +62,7 @@ from gc3libs.quantity import GB
 from bids.grabbids import BIDSLayout
 
 # Defaults
+RUN_DOCKER = "./run_docker.sh"
 MAX_MEMORY = 32*GB
 DEFAULT_BIDS_FOLDER = "data/"
 DEFAULT_RESULT_FOLDER = "output/"
@@ -122,6 +123,8 @@ class GbidsApplication(Application):
         self.subject_name = subject_name
         self.data_output_dir = extra_args['data_output_dir']
 
+        inputs[RUN_DOCKER] = "./run_docker.sh"
+
         if extra_args['transfer_data']:
             # Input data need to be transferred to compute node
             # include them in the `inputs` list and adapt
@@ -140,34 +143,48 @@ class GbidsApplication(Application):
                 os.mkdir(DEFAULT_RESULT_FOLDER)
             inputs[extra_args['default_output']] = DEFAULT_RESULT_FOLDER
 
-            # Define mount points
-            docker_mount = " -v $PWD/{SUBJECT_DIR}:/bids:ro -v $PWD/{OUTPUT_DIR}:/output ".format(
-                SUBJECT_DIR=DEFAULT_BIDS_FOLDER,
-                OUTPUT_DIR=DEFAULT_RESULT_FOLDER)
+            outputs.append(DEFAULT_RESULT_FOLDER)
+            
+            # # Define mount points
+            # docker_mount = " -v $PWD/{SUBJECT_DIR}:/bids:ro -v $PWD/{OUTPUT_DIR}:/output ".format(
+            #     SUBJECT_DIR=DEFAULT_BIDS_FOLDER,
+            #     OUTPUT_DIR=DEFAULT_RESULT_FOLDER)
 
-            analysis = analysis_level
-            outputs = [DEFAULT_RESULT_FOLDER]
+            # analysis = analysis_level
+            # outputs = [DEFAULT_RESULT_FOLDER]
+
+            run_docker_input_data = DEFAULT_BIDS_FOLDER
+            run_docker_output_data = DEFAULT_RESULT_FOLDER            
         else:
             # Use local filesystem as reference
             # Define mount points
-            docker_mount = " -v {SUBJECT_DIR}:/bids:ro -v {OUTPUT_DIR}:/output ".format(
-                SUBJECT_DIR=subject,
-                OUTPUT_DIR=extra_args['data_output_dir'])
+            run_docker_input_data = subject
+            run_docker_output_data = extra_args['data_output_dir']
+        
+        arguments = "./run_docker.sh {0} {1} {2} {3} {4}".format(docker_run,
+                                                                 run_docker_input_data,
+                                                                 run_docker_output_data,
+                                                                 analysis_level,
+                                                                 subject_name)
 
-            analysis = "{0} --participant_label {1}".format(analysis_level,
-                                                            subject_name)
+            # docker_mount = " -v {SUBJECT_DIR}:/bids:ro -v {OUTPUT_DIR}:/output ".format(
+            #     SUBJECT_DIR=subject,
+            #     OUTPUT_DIR=extra_args['data_output_dir'])
 
-        if extra_args['freesurfer_license']:
-            if extra_args['transfer_data']:
-                inputs[freesurfer_license] = os.path.basename(extra_args['freesurfer_license'])
-                freesurfer_path = "$PWD/{0}".format(inputs[freesurfer_license])
-            else:
-                freesurfer_path = extra_args['freesurfer_license']
-            docker_mount += " -v {0}:/opt/freesurfer/license.txt ".format(freesurfer_path)
+            # analysis = "{0} --participant_label {1}".format(analysis_level,
+            #                                                 subject_name)
 
-        arguments = DOCKER_RUN_COMMAND.format(DOCKER_MOUNT=docker_mount,
-                                              DOCKER_TO_RUN=docker_run,
-                                              ANALYSIS=analysis)
+        # if extra_args['freesurfer_license']:
+        #     if extra_args['transfer_data']:
+        #         inputs[freesurfer_license] = os.path.basename(extra_args['freesurfer_license'])
+        #         freesurfer_path = "$PWD/{0}".format(inputs[freesurfer_license])
+        #     else:
+        #         freesurfer_path = extra_args['freesurfer_license']
+        #     docker_mount += " -v {0}:/opt/freesurfer/license.txt ".format(freesurfer_path)
+
+        # arguments = DOCKER_RUN_COMMAND.format(DOCKER_MOUNT=docker_mount,
+        #                                       DOCKER_TO_RUN=docker_run,
+        #                                       ANALYSIS=analysis)
 
         gc3libs.log.debug("Creating application for executing: %s", arguments)
 
