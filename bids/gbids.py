@@ -124,6 +124,7 @@ class GbidsApplication(Application):
         self.data_output_dir = extra_args['data_output_dir']
 
         inputs[RUN_DOCKER] = "./run_docker.sh"
+        executables.append(inputs[RUN_DOCKER])
 
         if extra_args['transfer_data']:
             # Input data need to be transferred to compute node
