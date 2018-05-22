@@ -66,8 +66,9 @@ from bids.grabbids import BIDSLayout
 # Defaults
 RUN_DOCKER = "./run_docker.sh"
 MAX_MEMORY = 32*GB
-DEFAULT_BIDS_FOLDER = "data/"
-DEFAULT_RESULT_FOLDER = "output/"
+DEFAULT_BIDS_FOLDER = "$PWD/data/"
+DEFAULT_RESULT_FOLDER_LOCAL = "output"
+DEFAULT_RESULT_FOLDER_REMOTE = "$PWD/output/"
 DEFAULT_DOCKER_BIDS_ARGS = "--no-submm-recon"
 DEFAULT_FREESURFER_LICENSE_FILE = "license.txt"
 DEFAULT_DOCKER_BIDS_APP = "poldracklab/fmriprep " + DEFAULT_DOCKER_BIDS_ARGS
@@ -77,11 +78,11 @@ COPY_COMMAND = "cp {0}/* {1} -Rf"
 RUN_DOCKER_SCRIPT="""
 #!/bin/bash
 
-echo "[`date`]: Start"
-sudo docker run -i --rm -v ${data}:/bids -v ${output}:/output ${container} /bids /output ${analysis} --participant_label ${subject}"
+echo "[`date`]: Start processing for subject {subject}"
+sudo docker run -i --rm -v {data}:/bids -v {output}:/output {container} /bids /output {analysis} --participant_label {subject}"
 RET=$?
 echo "fixing local filesystem permission"
-# chown -R $UID:$GID ${output}
+# chown -R $UID:$GID {output}
 echo "[`date`]: Done with code $RET"
 exit $RET
 """
@@ -161,21 +162,17 @@ class GbidsApplication(Application):
             # Input data need to be transferred to compute node
             # include them in the `inputs` list and adapt
             # container execution command
-
-            if extra_args['default_output']:
-                inputs[subject] = os.path.join(DEFAULT_BIDS_FOLDER,
-                                               os.path.basename(subject))
+            
+            inputs[subject] = os.path.join(DEFAULT_BIDS_FOLDER,
+                                           os.path.basename(subject))
 
             # add all control files to 'data' folder
             for element in control_files:
                 inputs[element] = os.path.join(DEFAULT_BIDS_FOLDER,
                                                os.path.basename(element))
 
-            if not os.path.isdir(DEFAULT_RESULT_FOLDER):
-                os.mkdir(DEFAULT_RESULT_FOLDER)
-            inputs[extra_args['default_output']] = DEFAULT_RESULT_FOLDER
-
-            outputs.append(DEFAULT_RESULT_FOLDER)
+            inputs[extra_args['local_result_folder']] = DEFAULT_RESULT_FOLDER_REMOTE
+            outputs.append(DEFAULT_RESULT_FOLDER_REMOTE)
             
             # # Define mount points
             # docker_mount = " -v $PWD/{SUBJECT_DIR}:/bids:ro -v $PWD/{OUTPUT_DIR}:/output ".format(
@@ -186,7 +183,7 @@ class GbidsApplication(Application):
             # outputs = [DEFAULT_RESULT_FOLDER]
 
             run_docker_input_data = DEFAULT_BIDS_FOLDER
-            run_docker_output_data = DEFAULT_RESULT_FOLDER            
+            run_docker_output_data = DEFAULT_RESULT_FOLDER_REMOTE            
         else:
             # Use local filesystem as reference
             # Define mount points
@@ -335,26 +332,28 @@ class GbidsScript(SessionBasedScript):
         """
         tasks = []
         control_files = _get_control_files(self.params.bids_input_folder)
-
-        if self.params.transfer_data and not os.path.isdir(os.path.join(self.session.path,
-                                                                        DEFAULT_RESULT_FOLDER)):
-            os.mkdir(os.path.join(self.session.path,
-                                  DEFAULT_RESULT_FOLDER))
+        local_result_folder = os.path.join(self.session.path,
+                                           DEFAULT_RESULT_FOLDER_LOCAL)
+        
+        if self.params.transfer_data and not os.path.isdir(local_result_folder):
+            os.mkdir(os.path.join(local_result_folder))
 
         if _is_participant_analysis(self.params.analysis_level):
             # participant level analysis
             for (subject_dir, subject_name) in _get_subjects(self.params.bids_input_folder):
                 job_name = subject_name
 
+                extra_args = extra.copy()
+
                 if not self.params.transfer_data:
-                    # Use root BIDS folder
+                    # Use root BIDS folder and set participant label for each task
                     subject_dir = self.params.bids_input_folder
 
-                extra_args = extra.copy()
+                if self.params.transfer_data:
+                    extra_args['local_result_folder'] = local_result_folder
+                    
                 extra_args['session'] = self.session.path
                 extra_args['transfer_data'] = self.params.transfer_data
-                extra_args['default_output'] = os.path.join(self.session.path,
-                                                            DEFAULT_RESULT_FOLDER)
                 extra_args['jobname'] = job_name
                 extra_args['output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
                                                         '.compute',
