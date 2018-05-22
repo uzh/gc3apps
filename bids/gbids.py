@@ -48,6 +48,7 @@ __version__ = '1.0'
 import os
 import shutil
 import subprocess
+import tempfile
 
 # GC3Pie specific libraries
 import gc3libs
@@ -57,6 +58,7 @@ from gc3libs.workflow import RetryableTask
 from gc3libs.cmdline import SessionBasedScript, existing_file, existing_directory
 import gc3libs.utils
 from gc3libs.quantity import GB
+from gc3libs.utils import write_contents
 
 # 3rd-party dependencies
 from bids.grabbids import BIDSLayout
@@ -72,9 +74,38 @@ DEFAULT_DOCKER_BIDS_APP = "poldracklab/fmriprep " + DEFAULT_DOCKER_BIDS_ARGS
 ANALYSIS_LEVELS = ["participant", "group1", "group2", "group"]
 DOCKER_RUN_COMMAND = "sudo docker run -i --rm {DOCKER_MOUNT} {DOCKER_TO_RUN} /bids /output {ANALYSIS} "
 COPY_COMMAND = "cp {0}/* {1} -Rf"
+RUN_DOCKER_SCRIPT="""
+#!/bin/bash
+
+echo "[`date`]: Start"
+sudo docker run -i --rm -v ${data}:/bids -v ${output}:/output ${container} /bids /output ${analysis} --participant_label ${subject}"
+RET=$?
+echo "fixing local filesystem permission"
+# chown -R $UID:$GID ${output}
+echo "[`date`]: Done with code $RET"
+exit $RET
+"""
+
 
 # Utility methods
 
+def _make_temp_run_docker_file(location, docker, data, output, analysis, subject):
+    """
+    Create execution script to control docker execution and post-process
+    """
+    try:
+        (fd, tmp_filename) = tempfile.mkstemp(prefix="sbj{0}-".format(subject),dir=location)
+        write_contents(tmp_filename, RUN_DOCKER_SCRIPT.format(data=data,
+                                                                   output=output,
+                                                                   container=docker,
+                                                                   analysis=analysis,
+                                                                   subject=subject))
+        os.chmod(tmp_filename, 0755)
+        return tmp_filename
+    except Exception, ex:
+        gc3libs.log.debug("Error creating execution script."
+                          "Error type: %s. Message: %s" % (type(ex), ex.message))
+        raise
 
 def _get_subjects(root_input_folder):
     """
@@ -123,8 +154,8 @@ class GbidsApplication(Application):
         self.subject_name = subject_name
         self.data_output_dir = extra_args['data_output_dir']
 
-        inputs[RUN_DOCKER] = "./run_docker.sh"
-        executables.append(inputs[RUN_DOCKER])
+        # inputs[RUN_DOCKER] = "./run_docker.sh"
+        # executables.append(inputs[RUN_DOCKER])
 
         if extra_args['transfer_data']:
             # Input data need to be transferred to compute node
@@ -161,12 +192,20 @@ class GbidsApplication(Application):
             # Define mount points
             run_docker_input_data = subject
             run_docker_output_data = extra_args['data_output_dir']
-        
-        arguments = "./run_docker.sh {0} {1} {2} {3} {4}".format(docker_run,
-                                                                 run_docker_input_data,
-                                                                 run_docker_output_data,
-                                                                 analysis_level,
-                                                                 subject_name)
+
+        self.run_script = _make_temp_run_docker_file(extra_args['session'],
+                                                docker_run,
+                                                run_docker_input_data,
+                                                run_docker_output_data,
+                                                analysis_level,
+                                                subject_name)
+        inputs[self.run_script] = "./run_docker.sh"
+        executables.append(inputs[self.run_script])
+        # arguments = "./run_docker.sh {0} {1} {2} {3} {4}".format(docker_run,
+        #                                                          run_docker_input_data,
+        #                                                          run_docker_output_data,
+        #                                                          analysis_level,
+        #                                                          subject_name)
 
             # docker_mount = " -v {SUBJECT_DIR}:/bids:ro -v {OUTPUT_DIR}:/output ".format(
             #     SUBJECT_DIR=subject,
@@ -187,11 +226,11 @@ class GbidsApplication(Application):
         #                                       DOCKER_TO_RUN=docker_run,
         #                                       ANALYSIS=analysis)
 
-        gc3libs.log.debug("Creating application for executing: %s", arguments)
+        # gc3libs.log.debug("Creating application for executing: %s", arguments)
 
         Application.__init__(
             self,
-            arguments=arguments,
+            arguments="./run_docker.sh",
             inputs=inputs,
             outputs=outputs,
             stdout='{0}.log'.format(subject_name),
@@ -312,6 +351,7 @@ class GbidsScript(SessionBasedScript):
                     subject_dir = self.params.bids_input_folder
 
                 extra_args = extra.copy()
+                extra_args['session'] = self.session.path
                 extra_args['transfer_data'] = self.params.transfer_data
                 extra_args['default_output'] = os.path.join(self.session.path,
                                                             DEFAULT_RESULT_FOLDER)
