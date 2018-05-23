@@ -75,11 +75,10 @@ DEFAULT_DOCKER_BIDS_APP = "poldracklab/fmriprep " + DEFAULT_DOCKER_BIDS_ARGS
 ANALYSIS_LEVELS = ["participant", "group1", "group2", "group"]
 DOCKER_RUN_COMMAND = "sudo docker run -i --rm {DOCKER_MOUNT} {DOCKER_TO_RUN} /bids /output {ANALYSIS} "
 COPY_COMMAND = "cp {0}/* {1} -Rf"
-RUN_DOCKER_SCRIPT="""
-#!/bin/bash
+RUN_DOCKER_SCRIPT="""#!/bin/bash
 
 echo "[`date`]: Start processing for subject {subject}"
-sudo docker run -i --rm -v {data}:/bids -v {output}:/output {container} /bids /output {analysis} --participant_label {subject}"
+sudo docker run -i --rm -v {data}:/bids -v {output}:/output {container} /bids /output {analysis} --participant_label {subject}
 RET=$?
 echo "fixing local filesystem permission"
 # chown -R $UID:$GID {output}
