@@ -61,32 +61,46 @@ from gc3libs.quantity import GB
 from gc3libs.utils import write_contents
 
 # Defaults
-RUN_DOCKER = "./run_docker.sh"
-MAX_MEMORY = 32*GB
-DEFAULT_KOVESH_FOLDER = "$PWD/data/"
-DEFAULT_RESULT_FOLDER_LOCAL = "output"
-DEFAULT_RESULT_FOLDER_REMOTE = "$PWD/output/"
-DEFAULT_DOCKER_KOVESH_ARGS = "--no-submm-recon"
-DEFAULT_FREESURFER_LICENSE_FILE = "license.txt"
-DEFAULT_DOCKER_KOVESH_APP = "poldracklab/fmriprep " + DEFAULT_DOCKER_KOVESH_ARGS
-ANALYSIS_LEVELS = ["participant", "group1", "group2", "group"]
-DOCKER_RUN_COMMAND = "sudo docker run -i --rm {DOCKER_MOUNT} {DOCKER_TO_RUN} /kovesh /output {ANALYSIS} "
-COPY_COMMAND = "cp {0}/* {1} -Rf"
-RUN_DOCKER_SCRIPT="""#!/bin/bash
+KOVESCH_BASH="""
+#!/bin/bash
 
-echo "[`date`]: Start processing for subject {subject}"
-group=`id -g -n`
-sudo docker run -i --rm -v {data}:/kovesh -v {output}:/output {container} /kovesh /output {analysis} --participant_label {subject}
-RET=$?
-echo "fixing local filesystem permission"
-sudo chown -R $USER:$group {output}
-echo "[`date`]: Done with code $RET"
-exit $RET
+# the MAIN argument has to be present
+if [ $# -lt 3 ]; then
+    echo "Missing required arguments. Type '$me --help' to get usage help." 
+    exit 1
+fi
+
+## main
+echo "=== Starting at `date '+%Y-%m-%d %H:%M:%S'`"
+
+main="${1%%.m}"
+shift
+
+
+mkdir {output}
+python3 MC_script_gt.py -i {input_csv} -s {seed} -n {repetitions} -o {output}
+
 """
-
 
 # Utility methods
 
+def _make_temp_run_docker_file(location, input_csv, seed):
+    """
+    Create execution script to control docker execution and post-process
+    """
+    try:
+        (fd, tmp_filename) = tempfile.mkstemp(prefix="sbj{0}-".format(subject),dir=location)
+        write_contents(tmp_filename, RUN_SCRIPT.format(data=data,
+                                                       output=output,
+                                                       container=docker,
+                                                       analysis=analysis,
+                                                       subject=subject))
+        os.chmod(tmp_filename, 0755)
+        return tmp_filename
+    except Exception, ex:
+        gc3libs.log.debug("Error creating execution script."
+                          "Error type: %s. Message: %s" % (type(ex), ex.message))
+        raise
 
 # Custom application class
 
@@ -97,12 +111,18 @@ class GkoveshApplication(Application):
     """
     application_name = 'gkovesh'
 
-    def __init__(self, file_list, **extra_args):
+    def __init__(self, file_list, seed, repetitions, **extra_args):
 
         executables = []
         inputs = dict()
         outputs = []
 
+        for data in file_list:
+            inputs[data] = "./data/{0}".format(os.path.basename(data))
+        outputs = "./output"
+
+        arguments = KOVESCH_CMD.format(input_csv)
+        
         Application.__init__(
             self,
             arguments="hostname",
@@ -150,7 +170,31 @@ class GkoveshScript(SessionBasedScript):
                        help="Group data by size. Chunk expressed in bytes. "\
                        "Default: %(default)s.")
 
-    def new_tasks(self, extra):
+        self.add_param("-z", "--seed", dest="seed",
+                       type=positive_int,
+                       default=67,
+                       help="Random seed (needed for network randomization). "\
+                       "Default: %(default)s.")
+
+        self.add_param("-r", "--repetitions", dest="repetitions",
+                       type=positive_int,
+                       default=1,
+                       help="Number of randomizations to perform. "\
+                       "Default: %(default)s.")
+                                       
+
+        self.add_param("-g", "--group-repetitions", dest="groups",
+                       type=positive_int,
+                       default=1,
+                       help="Run repetitions together in groups. "\
+                       "Default: %(default)s.")
+
+
+        def parse_arguments(self):
+            self.group_repetitions = int(self.params.repetitions / self.params.groups)
+            assert self.group_repetitions > 0, "repetitions sould be higher than groups"
+        
+        def new_tasks(self, extra):
         """
         if analysis type is 'group'
            create single gkoveshApplication with all input data
@@ -158,7 +202,6 @@ class GkoveshScript(SessionBasedScript):
            for each valid input file create a new GkoveshApplication
         """
         tasks = []
-
         filelist = []
         total_size = 0
 
@@ -173,7 +216,11 @@ class GkoveshScript(SessionBasedScript):
 
                 self.log.debug("Creating Application for subject {0}".format(extra_args['jobname']))
 
-                tasks.append(GkoveshApplication(filelist, **extra_args))
+                for rep_indx in range(0, self.group_repetitions):
+                    tasks.append(GkoveshApplication(filelist,
+                                                    self.params.seed,
+                                                    self.params.groups,
+                                                    **extra_args))
 
                 filelist = []
                 total_size = 0
@@ -184,8 +231,12 @@ class GkoveshScript(SessionBasedScript):
 
                 self.log.debug("Creating Application for last subject {0}".format(extra_args['jobname']))
 
-                tasks.append(GkoveshApplication(filelist, **extra_args))
-            
+                for rep_indx in range(0, self.group_repetitions):
+                    tasks.append(GkoveshApplication(filelist,
+                                                    self.params.seed,
+                                                    self.params.repetitions,                                            
+                                                    **extra_args))
+
         return tasks
 
 # run script, but allow GC3Pie persistence module to access classes defined here;
