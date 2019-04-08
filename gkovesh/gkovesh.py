@@ -61,26 +61,9 @@ from gc3libs.quantity import GB
 from gc3libs.utils import write_contents
 
 # Defaults
-KOVESCH_BASH="""
-#!/bin/bash
-
-# the MAIN argument has to be present
-if [ $# -lt 3 ]; then
-    echo "Missing required arguments. Type '$me --help' to get usage help." 
-    exit 1
-fi
-
-## main
-echo "=== Starting at `date '+%Y-%m-%d %H:%M:%S'`"
-
-main="${1%%.m}"
-shift
-
-
-mkdir {output}
-python3 MC_script_gt.py -i {input_csv} -s {seed} -n {repetitions} -o {output}
-
-"""
+whereami = os.path.dirname(os.path.abspath(__file__))
+KOVESCH_RUN="python3 MC_script_gt.py -i {input_csv} -n {repetitions} -o {output}"
+KOVESCH_BASH=os.path.join(whereami,"./run_kovesh.sh")
 
 # Utility methods
 
@@ -111,7 +94,7 @@ class GkoveshApplication(Application):
     """
     application_name = 'gkovesh'
 
-    def __init__(self, file_list, seed, repetitions, **extra_args):
+    def __init__(self, file_list, repetitions, **extra_args):
 
         executables = []
         inputs = dict()
@@ -119,18 +102,20 @@ class GkoveshApplication(Application):
 
         for data in file_list:
             inputs[data] = "./data/{0}".format(os.path.basename(data))
-        outputs = "./output"
 
-        arguments = KOVESCH_CMD.format(input_csv)
+        inputs[KOVESCH_BASH] = "./run.sh"
+        # outputs = "./output"
+        arguments = "{0} ./data ./output {1}".format(inputs[KOVESCH_BASH],
+                                                     repetitions)
         
         Application.__init__(
             self,
-            arguments="hostname",
+            arguments=arguments,
             inputs=inputs,
-            outputs=outputs,
+            outputs=gc3libs.ANY_OUTPUT,
             stdout='log',
             join=True,
-            executables=executables,
+            executables=[inputs[KOVESCH_BASH]],
             **extra_args)
 
 class GkoveshScript(SessionBasedScript):
@@ -151,7 +136,6 @@ class GkoveshScript(SessionBasedScript):
     """
 
     def __init__(self):
-        self.kovesh_app_execution = DEFAULT_DOCKER_KOVESH_APP
         SessionBasedScript.__init__(
             self,
             version=__version__,
@@ -183,18 +167,18 @@ class GkoveshScript(SessionBasedScript):
                        "Default: %(default)s.")
                                        
 
-        self.add_param("-g", "--group-repetitions", dest="groups",
+        self.add_param("-g", "--group_repetitions", dest="groups",
                        type=positive_int,
                        default=1,
                        help="Run repetitions together in groups. "\
                        "Default: %(default)s.")
 
 
-        def parse_arguments(self):
-            self.group_repetitions = int(self.params.repetitions / self.params.groups)
-            assert self.group_repetitions > 0, "repetitions sould be higher than groups"
+    def parse_args(self):
+        self.group_repetitions = int(self.params.repetitions / self.params.groups)
+        assert self.group_repetitions > 0, "repetitions sould be higher than groups"
         
-        def new_tasks(self, extra):
+    def new_tasks(self, extra):
         """
         if analysis type is 'group'
            create single gkoveshApplication with all input data
@@ -218,7 +202,6 @@ class GkoveshScript(SessionBasedScript):
 
                 for rep_indx in range(0, self.group_repetitions):
                     tasks.append(GkoveshApplication(filelist,
-                                                    self.params.seed,
                                                     self.params.groups,
                                                     **extra_args))
 
@@ -233,7 +216,6 @@ class GkoveshScript(SessionBasedScript):
 
                 for rep_indx in range(0, self.group_repetitions):
                     tasks.append(GkoveshApplication(filelist,
-                                                    self.params.seed,
                                                     self.params.repetitions,                                            
                                                     **extra_args))
 
