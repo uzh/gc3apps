@@ -25,7 +25,7 @@
 me=$(basename "$0")
 
 ## defaults
-docker_image="s3ituzh/count-motif:1.0.12"
+docker_image="s3ituzh/count-motif:v-1.0.12"
 ## Exit status codes (mostly following <sysexits.h>)
 
 # successful exit
@@ -153,7 +153,6 @@ repetitions="${3}"
 for data in `ls $datadir`; do
     output_suffix=`basename $data`
     output="${outputprefix}/${output_suffix}"
-    mkdir -p ${output}
     echo "running ${repetitions} runs for ${output_suffix}"
     sudo docker run -v ${datadir}:/data -v ${output}:/output ${docker_image} -i /data/${data} -n ${repetitions} -o /output -m /data/3Motif_notation.tsv
 done

@@ -200,7 +200,7 @@ class GkoveshScript(SessionBasedScript):
                 total_size += os.path.getsize(data)
             else:
                 extra_args = extra.copy()
-                extra_args['jobname'] = "mbe"
+                extra_args['jobname'] = os.path.basename(filelist[0])
 
                 self.log.debug("Creating Application for subject {0}".format(extra_args['jobname']))
 
@@ -215,7 +215,7 @@ class GkoveshScript(SessionBasedScript):
 
         if len(filelist) > 0:
                 extra_args = extra.copy()
-                extra_args['jobname'] = "mbe"
+                extra_args['jobname'] = os.path.basename(filelist[0])
 
                 self.log.debug("Creating Application for last subject {0}".format(extra_args['jobname']))
 
