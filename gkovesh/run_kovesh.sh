@@ -5,7 +5,7 @@
 # Authors: Riccardo Murri <riccardo.murri@uzh.ch>,
 #          Sergio Maffioletti <sergio.maffioletti@uzh.ch>
 #
-#   Copyright (c) 2016,2017 S3IT, University of Zurich,
+#   Copyright (c) 2019,2020 S3IT, University of Zurich,
 #   http://www.s3it.uzh.ch/
 #
 # This program is free software; you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 me=$(basename "$0")
 
 ## defaults
-
+docker_image="s3ituzh/count-motif:1.0.12"
 ## Exit status codes (mostly following <sysexits.h>)
 
 # successful exit
@@ -72,6 +72,8 @@ Run KOVESH passing ARGS (if any) as command-line arguments.
 
 Options:
   -v            Enable verbose logging
+  -d		Docker image to use
+  -h		Print this help
 
 __EOF__
 }
@@ -98,8 +100,8 @@ is_absolute_path () {
 
 ## parse command-line
 
-short_opts='v'
-long_opts='help,verbose'
+short_opts='vd:h'
+long_opts='verbose,docker,help'
 
 # test which `getopt` version is available:
 # - GNU `getopt` will generate no output and exit with status 4
@@ -127,6 +129,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --verbose|-v)  verbose='-v' ;;
         --help|-h)     usage; exit 0 ;;
+	--docker|-d)   docker_image=$2; shift ;;
         --)            shift; break ;;
     esac
     shift
@@ -143,18 +146,16 @@ fi
 ## main
 echo "=== Starting at `date '+%Y-%m-%d %H:%M:%S'`"
 
-datadir="${1}"
-shift
-outputprefix="${2}"
-shift
-repetitions="{$3}"
+datadir=`realpath ${1}`
+outputprefix=`realpath ${2}`
+repetitions="${3}"
 
-foreach data in `ls $datadir`; do
-   output_suffix=`basename $data`
-   output=${outputprefix}/${output_suffix}
-   mkdir -p ${output}
-   echo "running ${repetitions} runs for ${output_suffix}"
-   python3 MC_script_gt.py -i ${data} -n ${repetitions} -o ${output}
+for data in `ls $datadir`; do
+    output_suffix=`basename $data`
+    output="${outputprefix}/${output_suffix}"
+    mkdir -p ${output}
+    echo "running ${repetitions} runs for ${output_suffix}"
+    sudo docker run -v ${datadir}:/data -v ${output}:/output ${docker_image} -i /data/${data} -n ${repetitions} -o /output -m /data/3Motif_notation.tsv
 done
 
 ## All done.

@@ -94,7 +94,7 @@ class GkoveshApplication(Application):
     """
     application_name = 'gkovesh'
 
-    def __init__(self, file_list, repetitions, **extra_args):
+    def __init__(self, file_list, motif_notation, repetitions, **extra_args):
 
         executables = []
         inputs = dict()
@@ -104,10 +104,11 @@ class GkoveshApplication(Application):
             inputs[data] = "./data/{0}".format(os.path.basename(data))
 
         inputs[KOVESCH_BASH] = "./run.sh"
+        inputs[motif_notation] = "./data/{0}".format(os.path.basename(motif_notation))
         # outputs = "./output"
         arguments = "{0} ./data ./output {1}".format(inputs[KOVESCH_BASH],
                                                      repetitions)
-        
+
         Application.__init__(
             self,
             arguments=arguments,
@@ -146,6 +147,9 @@ class GkoveshScript(SessionBasedScript):
     def setup_args(self):
         self.add_param("input_folder", type=existing_directory,
                        help="Input data")
+
+        self.add_param("motif_notation", type=existing_file,
+                       help="Motif Notation file")
 
     def setup_options(self):
         self.add_param("-K", "--chunk", dest="chunk",
@@ -202,6 +206,7 @@ class GkoveshScript(SessionBasedScript):
 
                 for rep_indx in range(0, self.group_repetitions):
                     tasks.append(GkoveshApplication(filelist,
+                                                    self.params.motif_notation,
                                                     self.params.groups,
                                                     **extra_args))
 
@@ -216,7 +221,8 @@ class GkoveshScript(SessionBasedScript):
 
                 for rep_indx in range(0, self.group_repetitions):
                     tasks.append(GkoveshApplication(filelist,
-                                                    self.params.repetitions,                                            
+                                                    self.params.motif_notation,
+                                                    self.params.repetitions,
                                                     **extra_args))
 
         return tasks
