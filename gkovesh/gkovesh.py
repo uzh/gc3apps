@@ -90,7 +90,7 @@ def _get_data_group_size(location):
     Return max file size in `location`
     """
 
-    return max([os.path.getsize(os.path.join(location,data_size)) for data_size in os.listdir(location) if os.path.isfile(data_size)])
+    return max([os.path.getsize(os.path.join(location,data_size)) for data_size in os.listdir(location) if os.path.isfile(os.path.join(location,data_size))])
 
 
 # Custom application class
