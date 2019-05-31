@@ -85,6 +85,14 @@ def _make_temp_run_docker_file(location, input_csv, seed):
                           "Error type: %s. Message: %s" % (type(ex), ex.message))
         raise
 
+def _get_data_group_size(location):
+    """
+    Return max file size in `location`
+    """
+
+    return max([os.path.getsize(os.path.join(location,data_size)) for data_size in os.listdir(location) if os.path.isfile(data_size)])
+
+
 # Custom application class
 
 
@@ -181,7 +189,11 @@ class GkoveshScript(SessionBasedScript):
     def parse_args(self):
         self.group_repetitions = int(self.params.repetitions / self.params.groups)
         assert self.group_repetitions > 0, "repetitions sould be higher than groups"
-        
+
+        self.data_group_size = max(self.params.chunk,
+                                   _get_data_group_size(self.params.input_folder)
+        gc3libs.log.info("Setting data group size to {0}bytes".format(self.data_group_size)
+
     def new_tasks(self, extra):
         """
         if analysis type is 'group'
@@ -195,7 +207,7 @@ class GkoveshScript(SessionBasedScript):
 
         for data in os.listdir(self.params.input_folder):
             data = os.path.join(self.params.input_folder, data)
-            if (total_size + os.path.getsize(data)) <= self.params.chunk:
+            if (total_size + os.path.getsize(data)) <= self.data_group_size:
                 filelist.append(data)
                 total_size += os.path.getsize(data)
             else:
