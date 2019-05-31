@@ -191,7 +191,7 @@ class GkoveshScript(SessionBasedScript):
         assert self.group_repetitions > 0, "repetitions sould be higher than groups"
 
         self.data_group_size = max(self.params.chunk,
-                                   _get_data_group_size(self.params.input_folder)
+                                   _get_data_group_size(self.params.input_folder))
         self.log.info("Setting data group size to {0}bytes".format(self.data_group_size))
 
     def new_tasks(self, extra):
