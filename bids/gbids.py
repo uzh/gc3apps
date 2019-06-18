@@ -78,10 +78,11 @@ COPY_COMMAND = "cp {0}/* {1} -Rf"
 RUN_DOCKER_SCRIPT="""#!/bin/bash
 
 echo "[`date`]: Start processing for subject {subject}"
+group=`id -g -n`
 sudo docker run -i --rm -v {data}:/bids -v {output}:/output {container} /bids /output {analysis} --participant_label {subject}
 RET=$?
 echo "fixing local filesystem permission"
-# chown -R $UID:$GID {output}
+sudo chown -R $USER:$group {output}
 echo "[`date`]: Done with code $RET"
 exit $RET
 """
@@ -154,9 +155,6 @@ class GbidsApplication(Application):
         self.subject_name = subject_name
         self.data_output_dir = extra_args['data_output_dir']
 
-        # inputs[RUN_DOCKER] = "./run_docker.sh"
-        # executables.append(inputs[RUN_DOCKER])
-
         if extra_args['transfer_data']:
             # Input data need to be transferred to compute node
             # include them in the `inputs` list and adapt
@@ -172,14 +170,6 @@ class GbidsApplication(Application):
 
             inputs[extra_args['local_result_folder']] = DEFAULT_RESULT_FOLDER_REMOTE
             outputs.append(DEFAULT_RESULT_FOLDER_REMOTE)
-            
-            # # Define mount points
-            # docker_mount = " -v $PWD/{SUBJECT_DIR}:/bids:ro -v $PWD/{OUTPUT_DIR}:/output ".format(
-            #     SUBJECT_DIR=DEFAULT_BIDS_FOLDER,
-            #     OUTPUT_DIR=DEFAULT_RESULT_FOLDER)
-
-            # analysis = analysis_level
-            # outputs = [DEFAULT_RESULT_FOLDER]
 
             run_docker_input_data = DEFAULT_BIDS_FOLDER
             run_docker_output_data = DEFAULT_RESULT_FOLDER_REMOTE            
@@ -197,32 +187,6 @@ class GbidsApplication(Application):
                                                 subject_name)
         inputs[self.run_script] = "./run_docker.sh"
         executables.append(inputs[self.run_script])
-        # arguments = "./run_docker.sh {0} {1} {2} {3} {4}".format(docker_run,
-        #                                                          run_docker_input_data,
-        #                                                          run_docker_output_data,
-        #                                                          analysis_level,
-        #                                                          subject_name)
-
-            # docker_mount = " -v {SUBJECT_DIR}:/bids:ro -v {OUTPUT_DIR}:/output ".format(
-            #     SUBJECT_DIR=subject,
-            #     OUTPUT_DIR=extra_args['data_output_dir'])
-
-            # analysis = "{0} --participant_label {1}".format(analysis_level,
-            #                                                 subject_name)
-
-        # if extra_args['freesurfer_license']:
-        #     if extra_args['transfer_data']:
-        #         inputs[freesurfer_license] = os.path.basename(extra_args['freesurfer_license'])
-        #         freesurfer_path = "$PWD/{0}".format(inputs[freesurfer_license])
-        #     else:
-        #         freesurfer_path = extra_args['freesurfer_license']
-        #     docker_mount += " -v {0}:/opt/freesurfer/license.txt ".format(freesurfer_path)
-
-        # arguments = DOCKER_RUN_COMMAND.format(DOCKER_MOUNT=docker_mount,
-        #                                       DOCKER_TO_RUN=docker_run,
-        #                                       ANALYSIS=analysis)
-
-        # gc3libs.log.debug("Creating application for executing: %s", arguments)
 
         Application.__init__(
             self,
@@ -321,7 +285,7 @@ class GbidsScript(SessionBasedScript):
 
         self.bids_app_execution = self.params.bids_app
         self.params.bids_output_folder = os.path.abspath(self.params.bids_output_folder)
-
+        
     def new_tasks(self, extra):
         """
         if analysis type is 'group'
@@ -333,10 +297,19 @@ class GbidsScript(SessionBasedScript):
         control_files = _get_control_files(self.params.bids_input_folder)
         local_result_folder = os.path.join(self.session.path,
                                            DEFAULT_RESULT_FOLDER_LOCAL)
+
+        for folder in [self.params.bids_output_folder]:
+            if not os.path.isdir(folder):
+                try:
+                    os.mkdir(folder)
+                except OSError, osx:
+                    gc3libs.log.error("Failed to create folder {0}. reason: '{1}'".format(folder,
+                                                                                          osx))
+
         
         if self.params.transfer_data and not os.path.isdir(local_result_folder):
             os.mkdir(os.path.join(local_result_folder))
-
+            
         if _is_participant_analysis(self.params.analysis_level):
             # participant level analysis
             for (subject_dir, subject_name) in _get_subjects(self.params.bids_input_folder):
@@ -354,7 +327,7 @@ class GbidsScript(SessionBasedScript):
                 extra_args['session'] = self.session.path
                 extra_args['transfer_data'] = self.params.transfer_data
                 extra_args['jobname'] = job_name
-                extra_args['output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
+                extra_args['output_dir'] = os.path.join(os.path.abspath(self.session.path),
                                                         '.compute',
                                                         subject_name)
                 extra_args['data_output_dir'] = os.path.join(os.path.abspath(self.params.bids_output_folder),
@@ -406,6 +379,9 @@ class GbidsScript(SessionBasedScript):
                                                                                     task.data_output_dir,
                                                                                     self.params.bids_output_folder))
                 gc3libs.utils.movetree(task.data_output_dir, self.params.bids_output_folder)
+                # Cleanup data_output_dir folder
+                gc3libs.log.debug("Removing task data_output_dir '{0}'".format(task.data_output_dir))
+                shutil.rmtree(task.data_output_dir)
 
 
 # run script, but allow GC3Pie persistence module to access classes defined here;
