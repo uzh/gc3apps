@@ -148,7 +148,7 @@ class GwasScript(SessionBasedScript):
         for input_folder in os.listdir(self.params.input):
             extra_args = extra.copy()
             extra_args["jobname"] = input_folder
-            extra_args["docker_was_version"] = self.params.was_release
+            extra_args["was_release"] = self.params.was_release
             
             tasks.append(GwasApplication(
                 os.path.abspath(os.path.join(self.params.input, input_folder)),

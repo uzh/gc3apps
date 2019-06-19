@@ -1,14 +1,21 @@
 args <- commandArgs(trailingOnly = TRUE)
 
 if(length(args)!=4){
-    print("Usage: R CMD BATCH '--args <functions+script.R> <function_name> <input.ncdf> <result folder>")
+    print("Usage: R CMD BATCH '--args <functions+script.R> <phenotype_file> <structure_file> <chromosomes_folder> <output folder>")
     quit(status=1)
 }
-	
-phenotypes_folder = args[1]
-chromosomes_folder = args[2]
-scripts_folder = args[3]
+
+
+phenotype_file = args[1] # e.g.  Mt_Hg_Cd_phenotypes2018.txt
+structure_file = args[2] # e.g. GH2_structure.txt
+chromosomes_folder = args[3] # location of all 8  chrX.hmp.txt files
 output_folder = args[4]
+
+
+# phenotypes_folder = args[1]
+# chromosomes_folder = args[2]
+# scripts_folder = args[3]
+# output_folder = args[4]
 
 
 # Import
@@ -25,23 +32,25 @@ library('scatterplot3d')
 library("data.table")
 library("pryr")
 
-message("DEBUG: Getting phenotype, structure and chromosomes files... ")
-phenotype_file <- file.path(phenotypes_folder, dir(phenotypes_folder, pattern = "phenotypes"))
-structure_file <- file.path(phenotypes_folder, dir(phenotypes_folder, pattern = "structure"))
-chromosomes_files <- file.path(chromosomes_folder, dir(chromosomes_folder, pattern = ".txt"))
 
 # Consistency checks
-# 1. check phenotype_file is indeed unique
-if (length(phenotype_file) > 1 || length(phenotype_file) == 0) {
-   write("Error. phenotype_file should be a single file, found [",length(phenotype_file),"].", stderr())
-   quit(save="no", status=1)			      
+if(!file.exists(phenotype_file)){
+	print(paste("Phenotype file ", phenotype_file, " not found"))
+	quit(status=1)
 }
 
-# 2. check structure_file is indeed unique
-if (length(structure_file) > 1 || length(structure_file) == 0) {
-   write("Error. structure_file should be a single file, found [",length(structure_file),"].", stderr())
-   quit(save="no", status=1)			      
+if(!file.exists(structure_file)){
+	print(paste("Structure file ", structure_file, " not found"))
+	quit(status=1)
 }
+
+if(!dir.exists(chromosomes_folder)){
+	print(paste("Chromosomes folder ", chromosomes_folder, " not found"))
+	quit(status=1)
+}
+
+message("DEBUG: Getting phenotype, structure and chromosomes files... ")
+chromosomes_files <- file.path(chromosomes_folder, dir(chromosomes_folder, pattern = ".txt"))
 
 message("DEBUG: Import GAPIT source files")
 # Import GAPIT source files
@@ -71,7 +80,7 @@ foreach (i=1:length(chromosomes_files)) %do%
 
 	# outdir_chr <- paste(output_folder, "01_gwas/chr", i, sep='')
 	outdir_chr <- file.path(output_folder, paste("01_gwas/chr", i, sep = ""))
-	message("DEBUG: set working dir to ", outdir_chr)
+	message("DEBUG: set working dir to ", oucat tdir_chr)
 	dir.create(outdir_chr, showWarnings = TRUE, recursive = FALSE, mode = "0777")
 	setwd(paste(outdir_chr))
 
@@ -94,10 +103,11 @@ foreach (i=1:length(chromosomes_files)) %do%
 	)
 
 	# cleanup of output folder	
-
+	junk <- dir(pattern="*.pdf")
+	print(paste("Remving files ", junk))
+	# file.remove(junk)
 	toc(msg=mem_used())
 
 # stopCluster(cl)
-
 
 message("Done")
