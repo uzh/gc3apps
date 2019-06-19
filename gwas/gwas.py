@@ -132,9 +132,6 @@ class GwasScript(SessionBasedScript):
         self.add_param('chromosomes', type=existing_directory,
                        help="Location of chromosomes files.")
 
-        # self.add_param('runner', type=existing_file,
-        #                help="Location R script to be executed.")
-
     def setup_options(self):
         self.add_param("-R", "--release", dest="was_release",
                        default=DEFAULT_WAS_RELEASE,
@@ -156,7 +153,6 @@ class GwasScript(SessionBasedScript):
             tasks.append(GwasApplication(
                 os.path.abspath(os.path.join(self.params.input, input_folder)),
                 os.path.abspath(self.params.chromosomes),
-                os.path.abspath(self.params.runner),
                 **extra_args))
                     
         return tasks
