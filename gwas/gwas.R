@@ -92,7 +92,12 @@ foreach (i=1:length(chromosomes_files)) %do%
 	      Major.allele.zero=TRUE,
 	      Geno.View.output=FALSE
 	)
+
+	# cleanup of output folder	
+
 	toc(msg=mem_used())
 
 # stopCluster(cl)
+
+
 message("Done")
