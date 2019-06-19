@@ -69,10 +69,12 @@ class GwasApplication(Application):
         # Set output
         outputs[DEFAULT_REMOTE_OUTPUT_FILE] = DEFAULT_REMOTE_OUTPUT_FILE
 
-        inputs[data_folder] = os.path.basename(input_folder)
-        inputs[chromosomes_folder] = os.path.basename(chromosomes_folder)
+        # Note: input data are amde available through network fileshare
+        # inputs[data_folder] = os.path.basename(input_folder)
+        # inputs[chromosomes_folder] = os.path.basename(chromosomes_folder)
             
-        arguments = DOCKER_CMD.format(DATA_MOUNT=inputs[data_folder],
+        arguments = DOCKER_CMD.format(DATA_MOUNT=input_folder,
+                                      CHROMOSOMES_MOUNT=chromosomes_folder,
                                       OUTPUT_MOUNT=outputs[DEFAULT_REMOTE_OUTPUT_FILE],
                                       was_release = extra_args["was_release"])
 
@@ -146,7 +148,7 @@ class GwasScript(SessionBasedScript):
         """
         tasks = []
 
-        for input_folders in os.listdir(self.params.input):
+        for input_folder in os.listdir(self.params.input):
             extra_args = extra.copy()
             extra_args["jobname"] = input_folder
             extra_args["docker_was_version"] = self.params.was_release
